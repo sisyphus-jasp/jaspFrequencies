@@ -522,18 +522,29 @@ InformedMultinomialTestBayesianInternal <- function(jaspResults, dataset, option
   if (!is.null(jaspResults[["sequentialAnalysisPlot"]]))
     return()
 
+  .createSequentialErrorPlot <- function(errorMessage) {
+    tempPlot <- createJaspPlot(title = gettext("Sequential analysis"), width = 480, height = 320)
+    tempPlot$dependOn(c(.informedMultDependency, "bayesFactorType", "bfComparison", "bfVsHypothesis",
+                        "sequentialAnalysisPlot", "sequentialAnalysisPlotType", "priorModelProbability", "sequentialAnalysisNumberOfSteps",
+                        "includeNullModel", "includeEncompassingModel"))
+    tempPlot$position <- 5
+    jaspResults[["sequentialAnalysisPlot"]] <- tempPlot
+    tempPlot$setError(errorMessage)
+  }
 
   # create/obtain sequential analysis
   .computeInformedMultSequentialResults(jaspResults, dataset, options)
+  if (is.null(jaspResults[["sequentialAnalysisResults"]]) ||
+      is.null(jaspResults[["sequentialAnalysisResults"]]$object) ||
+      nrow(jaspResults[["sequentialAnalysisResults"]]$object) == 0) {
+    .createSequentialErrorPlot(gettext("Sequential analysis requires data without an aggregated count variable."))
+    return()
+  }
   sequentialAnalysisResults <- jaspResults[["sequentialAnalysisResults"]]$object
 
   # create an empty plot in case the selection is restricted
   if (is.null(jaspResults[["models"]]$object) || .informedBayesNumberOfModels(jaspResults, options) < 2) {
-    tempPlot <- createJaspPlot(title = gettext("Sequential analysis"), width = 480, height = 320)
-    tempPlot$dependOn(c(.informedMultDependency, "includeNullModel", "includeEncompassingModel"))
-    tempPlot$position <- 5
-    jaspResults[["sequentialAnalysisPlot"]] <- tempPlot
-    tempPlot$setError(gettext("At least two models need to be specified."))
+    .createSequentialErrorPlot(gettext("At least two models need to be specified."))
     return()
   }
 
@@ -542,6 +553,10 @@ InformedMultinomialTestBayesianInternal <- function(jaspResults, dataset, option
     sequentialAnalysisResults <- sequentialAnalysisResults[sequentialAnalysisResults$model != "Null",]
   if (!options[["includeEncompassingModel"]])
     sequentialAnalysisResults <- sequentialAnalysisResults[sequentialAnalysisResults$model != "Encompassing",]
+  if (nrow(sequentialAnalysisResults) == 0) {
+    .createSequentialErrorPlot(gettext("At least two models need to be specified."))
+    return()
+  }
 
   if (options[["sequentialAnalysisPlotType"]] == "bayesFactor") {
 
@@ -587,7 +602,13 @@ InformedMultinomialTestBayesianInternal <- function(jaspResults, dataset, option
   } else if(options[["sequentialAnalysisPlotType"]] == "posteriorProbability") {
 
     # compute posterior probabilities
-    priorProb <- options[["priorModelProbability"]][[1]][["valuesParsed"]][options[["priorModelProbability"]][[1]][["levels"]] %in% unique(sequentialAnalysisResults$model)]
+    modelNames <- unique(sequentialAnalysisResults$model)
+    priorTable <- options[["priorModelProbability"]][[1]]
+    priorProb  <- priorTable[["valuesParsed"]][match(modelNames, priorTable[["levels"]])]
+    if (length(priorProb) != length(modelNames) || any(is.na(priorProb)) || sum(priorProb) <= 0) {
+      .createSequentialErrorPlot(gettext("Sequential analysis prior model probabilities do not match the selected models."))
+      return()
+    }
     priorProb <- priorProb / sum(priorProb)
     postProb  <- do.call(rbind, lapply(unique(sequentialAnalysisResults$step), function(step) {
 
@@ -602,7 +623,7 @@ InformedMultinomialTestBayesianInternal <- function(jaspResults, dataset, option
     }))
     postProb  <- rbind(
       data.frame(
-        model    = unique(sequentialAnalysisResults$model),
+        model    = modelNames,
         step     = 0,
         postProb = priorProb
       ),
