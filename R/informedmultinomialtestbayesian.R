@@ -525,7 +525,19 @@ InformedMultinomialTestBayesianInternal <- function(jaspResults, dataset, option
 
   # create/obtain sequential analysis
   .computeInformedMultSequentialResults(jaspResults, dataset, options)
-  sequentialAnalysisResults <- jaspResults[["sequentialAnalysisResults"]]$object
+  sequentialState           <- if ("sequentialAnalysisResults" %in% names(jaspResults)) jaspResults[["sequentialAnalysisResults"]] else NULL
+  sequentialAnalysisResults <- if (is.null(sequentialState)) NULL else sequentialState$object
+
+  if (is.null(sequentialAnalysisResults) || !is.data.frame(sequentialAnalysisResults) || nrow(sequentialAnalysisResults) == 0) {
+    tempPlot <- createJaspPlot(title = gettext("Sequential analysis"), width = 480, height = 320)
+    tempPlot$dependOn(c(.informedMultDependency, "bayesFactorType", "bfComparison", "bfVsHypothesis",
+                        "sequentialAnalysisPlot", "sequentialAnalysisPlotType", "priorModelProbability", "sequentialAnalysisNumberOfSteps",
+                        "includeNullModel", "includeEncompassingModel"))
+    tempPlot$position <- 5
+    jaspResults[["sequentialAnalysisPlot"]] <- tempPlot
+    tempPlot$setError(gettext("Sequential analysis is available only for individual-level data."))
+    return()
+  }
 
   # create an empty plot in case the selection is restricted
   if (is.null(jaspResults[["models"]]$object) || .informedBayesNumberOfModels(jaspResults, options) < 2) {
