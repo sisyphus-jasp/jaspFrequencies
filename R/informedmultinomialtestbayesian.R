@@ -586,8 +586,27 @@ InformedMultinomialTestBayesianInternal <- function(jaspResults, dataset, option
 
   } else if(options[["sequentialAnalysisPlotType"]] == "posteriorProbability") {
 
+    # create plot
+    tempPlot <- createJaspPlot(title = gettext("Sequential analysis"), width = 480, height = 320)
+    tempPlot$dependOn(c(.informedMultDependency, "bayesFactorType", "bfComparison", "bfVsHypothesis",
+                        "sequentialAnalysisPlot", "sequentialAnalysisPlotType", "priorModelProbability", "sequentialAnalysisNumberOfSteps",
+                        "includeNullModel", "includeEncompassingModel"))
+    tempPlot$position <- 5
+    jaspResults[["sequentialAnalysisPlot"]] <- tempPlot
+
+    modelNames <- unique(sequentialAnalysisResults$model)
+    if (length(modelNames) == 0) {
+      tempPlot$setError(gettext("No models remain to plot with current settings."))
+      return()
+    }
+
     # compute posterior probabilities
-    priorProb <- options[["priorModelProbability"]][[1]][["valuesParsed"]][options[["priorModelProbability"]][[1]][["levels"]] %in% unique(sequentialAnalysisResults$model)]
+    priorProb <- options[["priorModelProbability"]][[1]][["valuesParsed"]][options[["priorModelProbability"]][[1]][["levels"]] %in% modelNames]
+    if (length(priorProb) != length(modelNames) || sum(priorProb) <= 0) {
+      tempPlot$setError(gettext("Invalid prior model probabilities for selected models."))
+      return()
+    }
+
     priorProb <- priorProb / sum(priorProb)
     postProb  <- do.call(rbind, lapply(unique(sequentialAnalysisResults$step), function(step) {
 
@@ -602,20 +621,13 @@ InformedMultinomialTestBayesianInternal <- function(jaspResults, dataset, option
     }))
     postProb  <- rbind(
       data.frame(
-        model    = unique(sequentialAnalysisResults$model),
+        model    = modelNames,
         step     = 0,
         postProb = priorProb
       ),
       postProb
     )
 
-    # create plot
-    tempPlot <- createJaspPlot(title = gettext("Sequential analysis"), width = 480, height = 320)
-    tempPlot$dependOn(c(.informedMultDependency, "bayesFactorType", "bfComparison", "bfVsHypothesis",
-                        "sequentialAnalysisPlot", "sequentialAnalysisPlotType", "priorModelProbability", "sequentialAnalysisNumberOfSteps",
-                        "includeNullModel", "includeEncompassingModel"))
-    tempPlot$position <- 5
-    jaspResults[["sequentialAnalysisPlot"]] <- tempPlot
     tempPlot$plotObject <- .createInformedMultPlotSequentialProb(postProb)
 
 
